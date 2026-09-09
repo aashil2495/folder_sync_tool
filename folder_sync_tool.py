@@ -13,41 +13,18 @@ Mac -- and produces an Excel report showing:
 
 Subfolders are walked recursively on both sides.
 
-Because the two folders can live on separate machines with no shared file
-access, this script works in four modes (set MODE in .env or below):
+This script works in two modes (set MODE in .env or below):
 
   "scan"            Walk ONE local folder and save its contents (relative
                      paths, sizes, last-modified times) to a small JSON
-                     "manifest" file. Run this once on each machine --
-                     once against folder A, once against folder B.
-
-  "compare"         After copying both manifest JSON files onto one
-                     machine (email, USB, shared drive, chat -- whatever's
-                     easiest, they're tiny text files), run this mode to
-                     diff them and produce the Excel report.
-
-  "direct_compare"  If you can actually see both folders from a single
-                     machine at once (e.g. the RDP folder is reachable as
-                     a mapped network drive), skip the manifest step
-                     entirely and compare both folders directly in one run.
+                     "manifest" file. Useful on its own as a point-in-time
+                     inventory of a folder.
 
   "sftp_compare"    Folder A lives on an SFTP server, folder B is local to
                      the machine running this script. Connects to the SFTP
                      server, walks folder A remotely, walks folder B on
                      disk, and compares both in one run -- no manifest
                      files or copying needed.
-
-Typical workflow when the folders are on two separate machines:
-    Machine A:  set MODE = "scan", SCAN_ROOT_FOLDER = <A's folder path>,
-                SCAN_SIDE_LABEL = "A", run the script.
-                -> produces manifest_A.json
-    Machine B:  set MODE = "scan", SCAN_ROOT_FOLDER = <B's folder path>,
-                SCAN_SIDE_LABEL = "B", run the script.
-                -> produces manifest_B.json
-    Copy manifest_A.json and manifest_B.json onto the same machine.
-    On that machine: set MODE = "compare", point MANIFEST_A_PATH /
-    MANIFEST_B_PATH at the two files, run the script.
-                -> produces folder_sync_report.xlsx
 
 Cross-platform (Windows <-> Mac) notes -- handled automatically below:
   - Both Windows (NTFS) and Mac (APFS/HFS+) treat filenames as case-
@@ -101,20 +78,12 @@ def _env_bool(name: str, default: bool) -> bool:
 
 # ============================== CONFIG ==============================
 
-MODE = os.getenv("MODE", "scan")   # "scan" | "compare" | "direct_compare" | "sftp_compare"
+MODE = os.getenv("MODE", "scan")   # "scan" | "sftp_compare"
 
 # ---- used when MODE == "scan" ----
 SCAN_SIDE_LABEL = os.getenv("SCAN_SIDE_LABEL", "A")     # "A" or "B" -- just a label for filenames
 SCAN_ROOT_FOLDER = os.getenv("SCAN_ROOT_FOLDER", r"C:\path\to\folder_to_scan")
 MANIFEST_OUTPUT_PATH = f"manifest_{SCAN_SIDE_LABEL}.json"
-
-# ---- used when MODE == "compare" ----
-MANIFEST_A_PATH = os.getenv("MANIFEST_A_PATH", "manifest_A.json")
-MANIFEST_B_PATH = os.getenv("MANIFEST_B_PATH", "manifest_B.json")
-
-# ---- used when MODE == "direct_compare" ----
-FOLDER_A = os.getenv("FOLDER_A", r"C:\path\to\folder_a")
-FOLDER_B = os.getenv("FOLDER_B", r"D:\mapped_rdp_drive\folder_b")
 
 # ---- used when MODE == "sftp_compare" ----
 # Folder A lives on the SFTP server; folder B is local to this machine.
@@ -126,7 +95,7 @@ SFTP_PRIVATE_KEY_PATH = os.getenv("SFTP_PRIVATE_KEY_PATH", "")   # e.g. C:\Users
 SFTP_ROOT_FOLDER = os.getenv("SFTP_ROOT_FOLDER", "/remote/path/to/folder_a")   # POSIX-style path on the server
 LOCAL_ROOT_FOLDER = os.getenv("LOCAL_ROOT_FOLDER", r"C:\path\to\folder_b")     # path on THIS (client) machine
 
-# ---- used by "compare", "direct_compare" and "sftp_compare" ----
+# ---- used by "sftp_compare" ----
 LABEL_A = os.getenv("LABEL_A", "Folder A")
 LABEL_B = os.getenv("LABEL_B", "Folder B")
 EXCEL_REPORT_PATH = os.getenv("EXCEL_REPORT_PATH", "folder_sync_report.xlsx")
@@ -298,14 +267,6 @@ def save_manifest(manifest: dict, out_path: str, root: str) -> None:
         json.dump(payload, fh, indent=2, ensure_ascii=False)
     print(f"Scanned {len(manifest)} item(s) from {root}")
     print(f"Manifest written to {Path(out_path).resolve()}")
-
-
-def load_manifest(path: str) -> dict:
-    with open(path, "r", encoding="utf-8") as fh:
-        payload = json.load(fh)
-    print(f"Loaded manifest for {payload['scanned_root']} "
-          f"(scanned {payload['scanned_at']}, {len(payload['entries'])} item(s))")
-    return payload["entries"]
 
 
 def compare_manifests(manifest_a: dict, manifest_b: dict, tolerance: float) -> dict:
@@ -493,20 +454,6 @@ def main():
     if MODE == "scan":
         manifest = scan_folder(SCAN_ROOT_FOLDER)
         save_manifest(manifest, MANIFEST_OUTPUT_PATH, SCAN_ROOT_FOLDER)
-
-    elif MODE == "compare":
-        manifest_a = load_manifest(MANIFEST_A_PATH)
-        manifest_b = load_manifest(MANIFEST_B_PATH)
-        results = compare_manifests(manifest_a, manifest_b, TIMESTAMP_TOLERANCE_SECONDS)
-        write_excel_report(results, LABEL_A, LABEL_B, EXCEL_REPORT_PATH)
-
-    elif MODE == "direct_compare":
-        manifest_a = scan_folder(FOLDER_A)
-        manifest_b = scan_folder(FOLDER_B)
-        print(f"Scanned {len(manifest_a)} item(s) from {FOLDER_A}")
-        print(f"Scanned {len(manifest_b)} item(s) from {FOLDER_B}")
-        results = compare_manifests(manifest_a, manifest_b, TIMESTAMP_TOLERANCE_SECONDS)
-        write_excel_report(results, LABEL_A, LABEL_B, EXCEL_REPORT_PATH)
 
     elif MODE == "sftp_compare":
         sftp, transport = connect_sftp(
