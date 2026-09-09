@@ -9,7 +9,6 @@ venv/
 env/
 
 # Generated output
-manifest_*.json
 folder_sync_report.xlsx
 *.xlsx
 

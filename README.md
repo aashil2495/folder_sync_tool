@@ -26,7 +26,7 @@ plus one sheet per category.
 
 This is the setup where you're running an SFTP server on one machine (with a
 root folder shared over SFTP) and running this script on a **different**
-computer to compare a local folder against that SFTP root. This uses `MODE=sftp_compare`.
+computer to compare a local folder against that SFTP root.
 
 ### 1. Install Python
 
@@ -73,8 +73,6 @@ Open the new `.env` file in a text editor (Notepad, VS Code, whatever you
 have) and set these values:
 
 ```ini
-MODE=sftp_compare
-
 # The SFTP server -- the machine that has the root folder you're comparing against
 SFTP_HOST=192.168.1.50          # the SFTP server machine's IP address or hostname
 SFTP_PORT=22
@@ -136,27 +134,6 @@ category, then the individual sheets for exactly which files to copy where.
 
 ---
 
-## The `scan` mode
-
-Besides `sftp_compare`, the tool also has a standalone `scan` mode: it walks
-one local folder and saves its contents (relative paths, sizes,
-last-modified times) to a small JSON "manifest" file. This is useful on its
-own as a point-in-time inventory/audit of a folder, independent of any
-comparison.
-
-```ini
-MODE=scan
-SCAN_SIDE_LABEL=A
-SCAN_ROOT_FOLDER=C:\path\to\folder_to_scan
-```
-
-```bash
-python folder_sync_tool.py
-# -> produces manifest_A.json
-```
-
----
-
 ## Cross-platform handling (automatic)
 
 - **Case-insensitive matching**: `Report.pdf` and `report.pdf` are treated as
@@ -189,11 +166,10 @@ with defaults):
 
 - Python 3.9+
 - `openpyxl` (Excel report generation)
-- `paramiko` (SFTP support -- only exercised by `sftp_compare` mode)
+- `paramiko` (SFTP support)
 - `python-dotenv` (loads `.env`)
 
 ## Security note
 
-Never commit `.env`, manifest JSON files, or the generated `.xlsx` report if
-they contain sensitive paths or data -- all three are excluded by
-`.gitignore` by default.
+Never commit `.env` or the generated `.xlsx` report if it contains sensitive
+paths or data -- both are excluded by `.gitignore` by default.

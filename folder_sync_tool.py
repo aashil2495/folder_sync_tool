@@ -13,18 +13,10 @@ Mac -- and produces an Excel report showing:
 
 Subfolders are walked recursively on both sides.
 
-This script works in two modes (set MODE in .env or below):
-
-  "scan"            Walk ONE local folder and save its contents (relative
-                     paths, sizes, last-modified times) to a small JSON
-                     "manifest" file. Useful on its own as a point-in-time
-                     inventory of a folder.
-
-  "sftp_compare"    Folder A lives on an SFTP server, folder B is local to
-                     the machine running this script. Connects to the SFTP
-                     server, walks folder A remotely, walks folder B on
-                     disk, and compares both in one run -- no manifest
-                     files or copying needed.
+Folder A lives on an SFTP server, folder B is local to the machine running
+this script. Running the script connects to the SFTP server, walks folder A
+remotely, walks folder B on disk, and compares both in one run -- no
+manifest files or copying needed.
 
 Cross-platform (Windows <-> Mac) notes -- handled automatically below:
   - Both Windows (NTFS) and Mac (APFS/HFS+) treat filenames as case-
@@ -56,7 +48,6 @@ are reasonably accurate. TIMESTAMP_TOLERANCE_SECONDS below absorbs small
 clock drift / filesystem timestamp rounding differences.
 """
 
-import json
 import os
 import stat
 import unicodedata
@@ -78,14 +69,6 @@ def _env_bool(name: str, default: bool) -> bool:
 
 # ============================== CONFIG ==============================
 
-MODE = os.getenv("MODE", "scan")   # "scan" | "sftp_compare"
-
-# ---- used when MODE == "scan" ----
-SCAN_SIDE_LABEL = os.getenv("SCAN_SIDE_LABEL", "A")     # "A" or "B" -- just a label for filenames
-SCAN_ROOT_FOLDER = os.getenv("SCAN_ROOT_FOLDER", r"C:\path\to\folder_to_scan")
-MANIFEST_OUTPUT_PATH = f"manifest_{SCAN_SIDE_LABEL}.json"
-
-# ---- used when MODE == "sftp_compare" ----
 # Folder A lives on the SFTP server; folder B is local to this machine.
 SFTP_HOST = os.getenv("SFTP_HOST", "sftp.example.com")
 SFTP_PORT = int(os.getenv("SFTP_PORT", "22"))
@@ -95,7 +78,6 @@ SFTP_PRIVATE_KEY_PATH = os.getenv("SFTP_PRIVATE_KEY_PATH", "")   # e.g. C:\Users
 SFTP_ROOT_FOLDER = os.getenv("SFTP_ROOT_FOLDER", "/remote/path/to/folder_a")   # POSIX-style path on the server
 LOCAL_ROOT_FOLDER = os.getenv("LOCAL_ROOT_FOLDER", r"C:\path\to\folder_b")     # path on THIS (client) machine
 
-# ---- used by "sftp_compare" ----
 LABEL_A = os.getenv("LABEL_A", "Folder A")
 LABEL_B = os.getenv("LABEL_B", "Folder B")
 EXCEL_REPORT_PATH = os.getenv("EXCEL_REPORT_PATH", "folder_sync_report.xlsx")
@@ -255,18 +237,6 @@ def scan_folder_sftp(sftp, root: str) -> dict:
 
     _walk(root, "")
     return manifest
-
-
-def save_manifest(manifest: dict, out_path: str, root: str) -> None:
-    payload = {
-        "scanned_root": str(Path(root).resolve()),
-        "scanned_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "entries": manifest,
-    }
-    with open(out_path, "w", encoding="utf-8") as fh:
-        json.dump(payload, fh, indent=2, ensure_ascii=False)
-    print(f"Scanned {len(manifest)} item(s) from {root}")
-    print(f"Manifest written to {Path(out_path).resolve()}")
 
 
 def compare_manifests(manifest_a: dict, manifest_b: dict, tolerance: float) -> dict:
@@ -451,29 +421,21 @@ def write_excel_report(results, label_a, label_b, out_path):
 # ------------------------------ main ------------------------------
 
 def main():
-    if MODE == "scan":
-        manifest = scan_folder(SCAN_ROOT_FOLDER)
-        save_manifest(manifest, MANIFEST_OUTPUT_PATH, SCAN_ROOT_FOLDER)
+    sftp, transport = connect_sftp(
+        SFTP_HOST, SFTP_PORT, SFTP_USERNAME, SFTP_PASSWORD, SFTP_PRIVATE_KEY_PATH
+    )
+    try:
+        manifest_a = scan_folder_sftp(sftp, SFTP_ROOT_FOLDER)
+        print(f"Scanned {len(manifest_a)} item(s) from {SFTP_HOST}:{SFTP_ROOT_FOLDER}")
+    finally:
+        sftp.close()
+        transport.close()
 
-    elif MODE == "sftp_compare":
-        sftp, transport = connect_sftp(
-            SFTP_HOST, SFTP_PORT, SFTP_USERNAME, SFTP_PASSWORD, SFTP_PRIVATE_KEY_PATH
-        )
-        try:
-            manifest_a = scan_folder_sftp(sftp, SFTP_ROOT_FOLDER)
-            print(f"Scanned {len(manifest_a)} item(s) from {SFTP_HOST}:{SFTP_ROOT_FOLDER}")
-        finally:
-            sftp.close()
-            transport.close()
+    manifest_b = scan_folder(LOCAL_ROOT_FOLDER)
+    print(f"Scanned {len(manifest_b)} item(s) from {LOCAL_ROOT_FOLDER}")
 
-        manifest_b = scan_folder(LOCAL_ROOT_FOLDER)
-        print(f"Scanned {len(manifest_b)} item(s) from {LOCAL_ROOT_FOLDER}")
-
-        results = compare_manifests(manifest_a, manifest_b, TIMESTAMP_TOLERANCE_SECONDS)
-        write_excel_report(results, LABEL_A, LABEL_B, EXCEL_REPORT_PATH)
-
-    else:
-        raise ValueError(f"Unknown MODE: {MODE!r}")
+    results = compare_manifests(manifest_a, manifest_b, TIMESTAMP_TOLERANCE_SECONDS)
+    write_excel_report(results, LABEL_A, LABEL_B, EXCEL_REPORT_PATH)
 
 
 if __name__ == "__main__":
