@@ -28,21 +28,41 @@ This is the setup where you're running an SFTP server on one machine (with a
 root folder shared over SFTP) and running this script on a **different**
 computer to compare a local folder against that SFTP root.
 
+The client machine running this script can be **either Windows or Mac** --
+pick the commands for your OS at each step below. (Windows commands use the
+plain Command Prompt, `cmd.exe` -- not PowerShell.)
+
 ### 1. Install Python
 
 You need Python 3.9 or newer, **on the computer where you'll run this
 script** (the client machine, not the SFTP server).
 
-- Download from [python.org/downloads](https://www.python.org/downloads/)
-- During install on Windows, check the box **"Add python.exe to PATH"**
-- Verify it worked by opening a terminal (PowerShell) and running:
-  ```powershell
+**Windows:**
+- Download the installer from [python.org/downloads](https://www.python.org/downloads/)
+- During install, check the box **"Add python.exe to PATH"**
+- Open Command Prompt (search "cmd" in the Start menu) and verify:
+  ```bat
   python --version
+  ```
+
+**Mac:**
+- Download the installer from [python.org/downloads](https://www.python.org/downloads/)
+  (or, if you use [Homebrew](https://brew.sh/): `brew install python`)
+- Open Terminal and verify:
+  ```bash
+  python3 --version
   ```
 
 ### 2. Get the code
 
-```powershell
+**Windows (cmd):**
+```bat
+git clone https://github.com/aashil2495/folder_sync_tool.git
+cd folder_sync_tool
+```
+
+**Mac (Terminal):**
+```bash
 git clone https://github.com/aashil2495/folder_sync_tool.git
 cd folder_sync_tool
 ```
@@ -55,9 +75,17 @@ cd folder_sync_tool
 A virtual environment keeps this project's Python packages separate from
 everything else on your machine. Run these one at a time:
 
-```powershell
+**Windows (cmd):**
+```bat
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+```
+
+**Mac (Terminal):**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -65,12 +93,18 @@ If it worked, your terminal prompt now starts with `(.venv)`.
 
 ### 4. Create your `.env` config file
 
-```powershell
+**Windows (cmd):**
+```bat
 copy .env.example .env
 ```
 
-Open the new `.env` file in a text editor (Notepad, VS Code, whatever you
-have) and set these values:
+**Mac (Terminal):**
+```bash
+cp .env.example .env
+```
+
+Open the new `.env` file in a text editor (Notepad/VS Code on Windows,
+TextEdit/VS Code on Mac) and set these values:
 
 ```ini
 # The SFTP server -- the machine that has the root folder you're comparing against
@@ -81,6 +115,8 @@ SFTP_PASSWORD=your_sftp_password
 SFTP_ROOT_FOLDER=/                # the folder on the SFTP server to compare -- "/" means its whole shared root
 
 # The folder on THIS computer (the one running the script) to compare against it
+# Windows example: LOCAL_ROOT_FOLDER=C:\Users\you\Documents\MyFolder
+# Mac example:     LOCAL_ROOT_FOLDER=/Users/you/Documents/MyFolder
 LOCAL_ROOT_FOLDER=C:\Users\you\Documents\MyFolder
 
 # Optional: friendly names shown in the Excel report
@@ -92,26 +128,36 @@ Notes:
 - `SFTP_HOST` is the IP address or hostname of the machine running the SFTP
   server -- not "localhost", unless the script happens to run on that same
   machine.
-- `SFTP_ROOT_FOLDER` uses forward slashes (`/`), even though this is a
-  Windows path underneath -- most SFTP servers present their shared root as
-  `/`. Check your SFTP server's own documentation/settings if you're unsure
-  what path to use here.
+- `SFTP_ROOT_FOLDER` uses forward slashes (`/`) regardless of what OS the
+  SFTP server itself runs on -- most SFTP servers present their shared root
+  as `/`. Check your SFTP server's own documentation/settings if you're
+  unsure what path to use here.
+- `LOCAL_ROOT_FOLDER` uses whatever path style your client OS uses --
+  backslashes and a drive letter on Windows (`C:\...`), forward slashes on
+  Mac (`/Users/...`).
 - If your SFTP server uses a private key instead of a password, leave
   `SFTP_PASSWORD` blank and set `SFTP_PRIVATE_KEY_PATH` to the key file path
-  instead (e.g. `C:\Users\you\.ssh\id_rsa`).
+  instead (e.g. `C:\Users\you\.ssh\id_rsa` on Windows, `/Users/you/.ssh/id_rsa`
+  on Mac).
 - **Never commit or share your `.env` file** -- it holds your real
   credentials. It's already excluded via `.gitignore`.
 
 ### 5. Run it
 
-```powershell
+**Windows (cmd):**
+```bat
 python folder_sync_tool.py
+```
+
+**Mac (Terminal):**
+```bash
+python3 folder_sync_tool.py
 ```
 
 You'll see progress printed to the terminal, then a line like:
 
 ```
-Excel report written to C:\Users\you\folder_sync_tool\folder_sync_report.xlsx
+Excel report written to /path/to/folder_sync_tool/folder_sync_report.xlsx
 ```
 
 Open that file in Excel. Check the **Summary** sheet first for counts per
@@ -124,10 +170,12 @@ category, then the individual sheets for exactly which files to copy where.
 - **Authentication / connection errors**: double check `SFTP_HOST`,
   `SFTP_PORT`, `SFTP_USERNAME`, and `SFTP_PASSWORD`/`SFTP_PRIVATE_KEY_PATH` in
   `.env`. Confirm you can reach the SFTP server from this machine at all --
-  e.g. test with an SFTP client like [WinSCP](https://winscp.net/) or
-  FileZilla first, using the same host/port/credentials.
+  e.g. test with an SFTP client like [WinSCP](https://winscp.net/) (Windows)
+  or [Cyberduck](https://cyberduck.io/)/FileZilla (Mac) first, using the same
+  host/port/credentials.
 - **`NotADirectoryError`**: `LOCAL_ROOT_FOLDER` doesn't point at a real
-  folder on this machine -- check the path.
+  folder on this machine -- check the path, and make sure it uses the right
+  slash direction for your OS.
 - Nothing shows up as different but you expected changes: check
   `TIMESTAMP_TOLERANCE_SECONDS` in `.env` and make sure both machines' clocks
   are reasonably accurate.
