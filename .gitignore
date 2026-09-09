@@ -1,0 +1,18 @@
+# Secrets -- never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Generated output
+manifest_*.json
+folder_sync_report.xlsx
+*.xlsx
+
+# OS junk
+.DS_Store
+Thumbs.db
